@@ -194,6 +194,7 @@ class MentionMonitor:
                 if inserted:
                     total_synced += 1
                     logger.info(f"Inserted new mention {mention.id} from {mention.uname}")
+                    logger.info(f"Full mention JSON: {mention}")
 
             if cursor == 0:
                 break
