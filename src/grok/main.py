@@ -5,10 +5,6 @@ import logging
 import signal
 from typing import Optional
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-
 # logging.getLogger("langgraph").setLevel(logging.DEBUG)
 # logging.getLogger("langgraph.graph").setLevel(logging.DEBUG)
 # logging.getLogger("langchain").setLevel(logging.DEBUG)
@@ -158,8 +154,6 @@ class GrokBot:
         logger.info("Starting Grok bot...")
 
         await self._mention_monitor.run(self._handle_mention)
-
-    _shutdown_started = False
 
     async def shutdown(self):
         """Shutdown all components."""
