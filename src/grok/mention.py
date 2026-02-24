@@ -68,7 +68,7 @@ class MentionMonitor:
 
     async def fetch_unread_count(self) -> int:
         """Get unread mention count."""
-        logger.debug("Fetching unread mention count...")
+        logger.info("Fetching unread mention count...")
         resp = await self.client.get(f"{self.API_URL}/x/msgfeed/at")
         resp.raise_for_status()
         data = resp.json()
@@ -88,7 +88,7 @@ class MentionMonitor:
         Returns:
             tuple: (list of MentionItem, next cursor)
         """
-        logger.debug(f"Fetching mention list (cursor: {cursor}, size: {size})")
+        logger.info(f"Fetching mention list (cursor: {cursor}, size: {size})")
         resp = await self.client.get(
             f"{self.API_URL}/x/msgfeed/at",
             params={"type": "at", "cursor": cursor, "size": size},
@@ -112,8 +112,8 @@ class MentionMonitor:
             item_data = item.get("item", {})
             return MentionItem(
                 id=item.get("id", 0),
-                type=item_data.get("type", 1),
-                oid=item_data.get("target_id", 0) or item_data.get("business_id", 0),
+                type=item_data.get("type", "reply"),
+                oid=item_data.get("subject_id", 0),
                 root=item_data.get("root_id", 0),
                 parent=item_data.get("target_id", 0),
                 mid=item.get("user", {}).get("mid", 0),
@@ -134,7 +134,7 @@ class MentionMonitor:
 
         for mention in mentions:
             if mention.hide_reply_button:
-                logger.debug(f"Mention {mention.id} skipped: hide_reply_button=True")
+                logger.info(f"Mention {mention.id} skipped: hide_reply_button=True")
                 continue
 
             type_val = mention.type
@@ -142,7 +142,7 @@ class MentionMonitor:
                 type_val = type_val.lower()
 
             if type_val not in valid_types:
-                logger.debug(
+                logger.info(
                     f"Mention {mention.id} skipped: type {mention.type} not in valid types"
                 )
                 continue
@@ -161,6 +161,10 @@ class MentionMonitor:
         logger.info("Starting mention sync...")
 
         while True:
+            if not self._running:
+                logger.info("Mention monitor stopped, aborting sync")
+                break
+
             mentions, cursor = await self.fetch_mention_list(cursor, self.batch_size)
 
             if not mentions:
@@ -189,7 +193,7 @@ class MentionMonitor:
                 inserted = await self.db.insert_mention(db_mention)
                 if inserted:
                     total_synced += 1
-                    logger.debug(f"Inserted new mention {mention.id} from {mention.uname}")
+                    logger.info(f"Inserted new mention {mention.id} from {mention.uname}")
 
             if cursor == 0:
                 break
@@ -199,15 +203,23 @@ class MentionMonitor:
 
     async def process_mentions(self, handler):
         """Process pending mentions with handler callback."""
+        if not self._running:
+            logger.info("Mention monitor stopped, skipping processing")
+            return
+
         pending = await self.db.get_pending_mentions(self.batch_size)
 
         if not pending:
-            logger.debug("No pending mentions to process")
+            logger.info("No pending mentions to process")
             return
 
         logger.info(f"Processing {len(pending)} pending mentions")
 
         for mention in pending:
+            if not self._running:
+                logger.info("Mention monitor stopped during processing")
+                break
+
             logger.info(
                 f"Processing mention {mention.id} from {mention.uname}: {mention.content[:50]}..."
             )
@@ -215,6 +227,11 @@ class MentionMonitor:
 
             try:
                 reply_content = await handler(mention)
+
+                if not self._running:
+                    logger.info("Mention monitor stopped, saving state and exiting")
+                    break
+
                 if reply_content:
                     await self.db.update_mention_status(mention.id, "replied", reply_content)
                     logger.info(f"Replied to mention {mention.id}: {reply_content[:50]}...")
@@ -232,14 +249,22 @@ class MentionMonitor:
 
         while self._running:
             try:
-                logger.debug(f"Poll interval: {self.poll_interval}s")
+                logger.info(f"Poll interval: {self.poll_interval}s")
                 await self.sync_mentions()
                 await self.process_mentions(handler)
+            except asyncio.CancelledError:
+                logger.info("Mention monitor cancelled, shutting down...")
+                self._running = False
+                break
             except Exception as e:
                 logger.error(f"Error in mention monitor: {e}")
 
-            await asyncio.sleep(self.poll_interval)
+            for _ in range(self.poll_interval):
+                if not self._running:
+                    break
+                await asyncio.sleep(1)
 
     async def stop(self):
         """Stop the monitor."""
+        logger.info("Stopping mention monitor...")
         self._running = False

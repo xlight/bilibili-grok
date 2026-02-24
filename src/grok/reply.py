@@ -1,10 +1,13 @@
 """BiliBili comment reply implementation."""
 
 import asyncio
+import logging
 from enum import IntEnum
 from typing import Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class ReplyType(IntEnum):
@@ -78,8 +81,21 @@ class CommentReply:
             1: "reply",
             2: "like",
             4: "share",
+            "reply": "reply",
+            "dynamic": "reply",
         }
         return type_map.get(type_, "reply")
+
+    def _get_type_id(self, type_) -> int:
+        """Map type to ID."""
+        if isinstance(type_, int):
+            return type_
+        type_map = {
+            "reply": 1,
+            "like": 2,
+            "dynamic": 1,
+        }
+        return type_map.get(str(type_), 1)
 
     async def reply_to_comment(
         self,
@@ -110,11 +126,12 @@ class CommentReply:
         """
         await self._check_rate_limit()
 
+        type_id = self._get_type_id(type_)
         type_name = self._get_type_name(type_)
 
         data = {
             "message": message,
-            "type": type_,
+            "type": type_id,
             "oid": oid,
             "root": root,
             "parent": parent,
@@ -124,12 +141,16 @@ class CommentReply:
         if at_mids:
             data["at_mids"] = ",".join(map(str, at_mids))
 
+        logger.info(f"Sending reply to oid={oid}, type={type_id} ({type_name}): {message[:50]}...")
+
         resp = await self.client.post(
             f"{self.API_URL}/x/v2/{type_name}/add",
             data=data,
         )
         resp.raise_for_status()
         result = resp.json()
+
+        logger.info(f"Reply API response: {result}")
 
         code = result.get("code", -1)
 
@@ -146,11 +167,15 @@ class CommentReply:
         if code == 12030:
             raise ReplyError("Cannot reply to this comment")
         if code != 0:
-            raise ReplyError(f"Failed to reply: {result.get('message', 'Unknown error')}")
+            raise ReplyError(
+                f"Failed to reply: code={code}, message={result.get('message', 'Unknown error')}"
+            )
 
         return result.get("data", {})
 
-    async def reply_to_mention(self, oid: int, type_: int, message: str) -> dict:
+    async def reply_to_mention(
+        self, oid: int, type_: str, message: str, root: int = 0, parent: int = 0
+    ) -> dict:
         """Reply to a mention (convenience method).
 
         For mentions, we use the root/parent IDs from the mention.
@@ -159,8 +184,8 @@ class CommentReply:
             oid=oid,
             type_=type_,
             message=message,
-            root=0,
-            parent=0,
+            root=root,
+            parent=parent,
         )
 
     async def reply_to_reply(

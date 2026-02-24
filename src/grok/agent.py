@@ -18,7 +18,7 @@ class AgentConfig:
     api_key: str = ""
     max_tokens: int = 500
     temperature: float = 0.7
-    system_prompt: str = """You are a helpful assistant on Bilibili. 
+    system_prompt: str = """You are a helpful assistant on Bilibili.
 Respond naturally in Chinese to comments that @mention the user.
 Keep your responses concise and friendly (under 200 characters).
 Always be polite and helpful."""
@@ -45,11 +45,17 @@ class BilibiliAgent:
 
     def _initialize_agent(self):
         """Initialize the LangGraph agent."""
+        # import logging
+
+        # logging.getLogger("langgraph").setLevel(logging.DEBUG)
+        # logging.getLogger("langchain").setLevel(logging.DEBUG)
+        # logging.getLogger("langchain_openai").setLevel(logging.DEBUG)
+
         try:
             import litellm
 
             litellm.drop_params = True
-            litellm.set_verbose = False
+            litellm.set_verbose = True
         except ImportError:
             pass
 
@@ -74,6 +80,7 @@ class BilibiliAgent:
         mention_content: str,
         username: str,
         context: Optional[dict] = None,
+        timeout: int = 60,
     ) -> str:
         """Generate a reply to a mention.
 
@@ -81,21 +88,43 @@ class BilibiliAgent:
             mention_content: The @mention comment content
             username: The username who mentioned
             context: Additional context (video title, etc.)
+            timeout: Timeout in seconds
 
         Returns:
             Generated reply text
         """
+        import logging
+        import asyncio
+
+        logger = logging.getLogger(__name__)
+
         prompt = self._build_prompt(mention_content, username, context)
 
         try:
-            result = await self._agent.ainvoke(
-                {
-                    "messages": [
-                        SystemMessage(content=self.config.system_prompt),
-                        HumanMessage(content=prompt),
-                    ]
-                }
+            logger.info(f"Calling LLM for mention from {username}...")
+
+            task = asyncio.create_task(
+                self._agent.ainvoke(
+                    {
+                        "messages": [
+                            SystemMessage(content=self.config.system_prompt),
+                            HumanMessage(content=prompt),
+                        ]
+                    }
+                )
             )
+
+            try:
+                result = await asyncio.wait_for(task, timeout=timeout)
+            except asyncio.TimeoutError:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+                raise AgentError(f"LLM call timed out after {timeout} seconds")
+
+            logger.info(f"LLM response received")
 
             messages = result.get("messages", [])
             if not messages:
@@ -106,6 +135,9 @@ class BilibiliAgent:
 
             return self._clean_reply(reply)
 
+        except asyncio.CancelledError:
+            logger.warning("LLM call cancelled")
+            raise AgentError("LLM call cancelled")
         except Exception as e:
             raise AgentError(f"Failed to generate reply: {e}")
 

@@ -1,8 +1,22 @@
 """Main entry point for Bilibili Grok bot."""
 
 import asyncio
+import logging
 import signal
 from typing import Optional
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+
+# logging.getLogger("langgraph").setLevel(logging.DEBUG)
+# logging.getLogger("langgraph.graph").setLevel(logging.DEBUG)
+# logging.getLogger("langchain").setLevel(logging.DEBUG)
+# logging.getLogger("langchain_core").setLevel(logging.DEBUG)
+# logging.getLogger("langchain_openai").setLevel(logging.DEBUG)
+# logging.getLogger("litellm").setLevel(logging.DEBUG)
+# logging.getLogger("litellm.main").setLevel(logging.DEBUG)
+# logging.getLogger("httpx").setLevel(logging.INFO)
 
 from grok import __version__
 from grok.agent import BilibiliAgent, AgentConfig
@@ -30,6 +44,7 @@ class GrokBot:
         self._agent: Optional[BilibiliAgent] = None
         self._health: Optional[HealthCheck] = None
         self._shutdown: Optional[GracefulShutdown] = None
+        self._shutdown_started: bool = False
 
     async def initialize(self):
         """Initialize all components."""
@@ -127,6 +142,8 @@ class GrokBot:
                 oid=mention.oid,
                 type_=mention.type,
                 message=reply_content,
+                root=mention.root,
+                parent=mention.parent,
             )
 
             logger.info(f"Successfully replied to mention {mention.id}")
@@ -142,9 +159,22 @@ class GrokBot:
 
         await self._mention_monitor.run(self._handle_mention)
 
+    _shutdown_started = False
+
     async def shutdown(self):
         """Shutdown all components."""
+        import asyncio
+
+        if self._shutdown_started:
+            logger.info("Shutdown already in progress")
+            return
+
+        self._shutdown_started = True
         logger.info("Shutting down Grok bot...")
+
+        current_task = asyncio.current_task()
+        if current_task:
+            current_task.cancel()
 
         if self._mention_monitor:
             await self._mention_monitor.stop()
@@ -175,6 +205,17 @@ async def main():
     except ConfigError as e:
         print(f"Configuration error: {e}")
         return 1
+
+    debug_loggers = [
+        # "langgraph",
+        # "langgraph.graph",
+        # "langchain",
+        # "langchain_core",
+        # "litellm",
+        # "litellm.main",
+    ]
+    for name in debug_loggers:
+        logging.getLogger(name).setLevel(logging.DEBUG)
 
     setup_logging(
         level=config.logging.level,
