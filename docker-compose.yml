@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  grok:
+    build: .
+    container_name: bilibili-grok
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - LITELLM_API_KEY=${LITELLM_API_KEY}
+      - SEARCH_API_KEY=${SEARCH_API_KEY}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - grok-network
+
+networks:
+  grok-network:
+    driver: bridge
