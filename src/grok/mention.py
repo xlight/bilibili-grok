@@ -10,7 +10,8 @@ import httpx
 
 from grok.db import Database, Mention
 
-logger = logging.getLogger(__name__)
+# 创建特定的日志 logger，以便于区分日志源
+logger = logging.getLogger(__name__)  # This will be 'grok.mention'
 
 
 def strip_bot_mentions(
@@ -112,11 +113,15 @@ class MentionMonitor:
         db: Database,
         poll_interval: int = 60,
         batch_size: int = 20,
+        processing_interval_seconds: int = 20,
+        processing_timeout_minutes: int = 20,
     ):
         self.cookies = cookies
         self.db = db
         self.poll_interval = poll_interval
         self.batch_size = batch_size
+        self.processing_interval_seconds = processing_interval_seconds
+        self.processing_timeout_minutes = processing_timeout_minutes
         self._running = False
         self._client: httpx.AsyncClient | None = None
 
@@ -257,70 +262,156 @@ class MentionMonitor:
         logger.info(f"Mention sync complete: {total_synced} new, {total_fetched} total fetched")
         return total_synced
 
-    async def process_mentions(self, handler: Callable[[Mention], None]) -> None:
-        """Process pending mentions with handler callback."""
-        if not self._running:
-            logger.info("Mention monitor stopped, skipping processing")
-            return
+    async def _mention_listener(self):
+        """Listener task: sync mentions from API to database."""
+        listener_logger = logging.getLogger(__name__ + ".listener")  # 'grok.mention.listen'
+        listener_logger.info("Mention listener started")
 
-        pending = await self.db.get_pending_mentions(self.batch_size)
-
-        if not pending:
-            logger.info("No pending mentions to process")
-            return
-
-        logger.info(f"Processing {len(pending)} pending mentions")
-
-        for mention in pending:
-            if not self._running:
-                logger.info("Mention monitor stopped during processing")
-                break
-
-            logger.info(
-                f"Processing mention {mention.id} from {mention.uname}: {mention.content[:50]}..."
-            )
-            await self.db.update_mention_status(mention.id, "processing")
-
-            try:
-                reply_content = await handler(mention)
-
-                if not self._running:
-                    logger.info("Mention monitor stopped, saving state and exiting")
+        try:
+            while self._running:
+                try:
+                    await self.sync_mentions()
+                    listener_logger.info("Mention sync completed, waiting for next poll interval")
+                except asyncio.CancelledError:
+                    listener_logger.info("Mention listener cancelled")
                     break
+                except Exception as e:
+                    listener_logger.error(f"Error in mention listener: {e}")
+                    # 添加短暂延时以防网络错误导致的快速重试
+                    try:
+                        await asyncio.sleep(5)
+                    except asyncio.CancelledError:
+                        break
 
-                if reply_content:
-                    await self.db.update_mention_status(mention.id, "replied", reply_content)
-                    logger.info(f"Replied to mention {mention.id}: {reply_content[:50]}...")
-                else:
-                    await self.db.update_mention_status(mention.id, "skipped")
-                    logger.info(f"Skipped mention {mention.id}")
-            except Exception as e:
-                await self.db.update_mention_status(mention.id, "failed")
-                logger.error(f"Failed to process mention {mention.id}: {e}")
+                # Wait for configured poll interval
+                for _ in range(self.poll_interval):
+                    if not self._running:
+                        break
+                    await asyncio.sleep(1)
 
-    async def run(self, handler):
-        """Run the mention monitor loop."""
-        self._running = True
-        logger.info("Mention monitor started")
+        except Exception:
+            # 意外异常不应该结束监听器
+            listener_logger.exception("Unexpected error in listener")
+        finally:
+            listener_logger.info("Mention listener stopped")
 
-        while self._running:
-            try:
-                logger.info(f"Poll interval: {self.poll_interval}s")
-                await self.sync_mentions()
-                await self.process_mentions(handler)
-            except asyncio.CancelledError:
-                logger.info("Mention monitor cancelled, shutting down...")
-                self._running = False
-                break
-            except Exception as e:
-                logger.error(f"Error in mention monitor: {e}")
+    async def _mention_worker(self, handler: Callable[[Mention], str | None]):
+        """Worker task: process mentions one by one with interval."""
+        worker_logger = logging.getLogger(__name__ + ".worker")  # 'grok.mention.worke'
+        worker_logger.info(
+            f"Mention worker started (interval: {self.processing_interval_seconds}s, "
+            f"timeout: {self.processing_timeout_minutes}min)"
+        )
 
-            for _ in range(self.poll_interval):
-                if not self._running:
+        try:
+            while self._running:
+                try:
+                    # Get one pending mention (LIFO)
+                    mention = await self.db.get_one_pending_mention()
+
+                    if mention:
+                        # Check if mention is too old
+                        import time
+
+                        age_minutes = (time.time() - mention.ctime) / 60
+                        if age_minutes > self.processing_timeout_minutes:
+                            worker_logger.warning(
+                                f"Mention {mention.id} too old ({age_minutes:.1f}min > "
+                                f"{self.processing_timeout_minutes}min), skipping"
+                            )
+                            await self.db.update_mention_status(
+                                mention.id, "skipped", f"超时跳过 ({age_minutes:.1f}min)"
+                            )
+                            continue
+
+                        worker_logger.info(
+                            f"Processing mention {mention.id} from {mention.uname}: {mention.content[:50]}..."
+                        )
+                        await self.db.update_mention_status(mention.id, "processing")
+
+                        try:
+                            reply_content = await handler(mention)
+
+                            if not self._running:
+                                worker_logger.info(
+                                    "Mention worker stopped, saving state and exiting"
+                                )
+                                break
+
+                            if reply_content:
+                                await self.db.update_mention_status(
+                                    mention.id, "replied", reply_content
+                                )
+                                worker_logger.info(
+                                    f"Replied to mention {mention.id}: {reply_content[:50]}..."
+                                )
+                            else:
+                                await self.db.update_mention_status(mention.id, "skipped")
+                                worker_logger.info(f"Skipped mention {mention.id}")
+                        except Exception as e:
+                            await self.db.update_mention_status(mention.id, "failed")
+                            worker_logger.error(f"Failed to process mention {mention.id}: {e}")
+
+                    # Wait for configured processing interval
+                    await asyncio.sleep(self.processing_interval_seconds)
+
+                except asyncio.CancelledError:
+                    worker_logger.info("Mention worker cancelled")
                     break
-                await asyncio.sleep(1)
+                except Exception as e:
+                    worker_logger.error(f"Error in mention worker: {e}")
+                    try:
+                        # Wait before continuing even on error, to avoid rapid spinning
+                        await asyncio.sleep(self.processing_interval_seconds)
+                    except asyncio.CancelledError:
+                        break
+
+        except Exception:
+            # 意外异常不应该结束工作者
+            worker_logger.exception("Unexpected error in worker")
+        finally:
+            worker_logger.info("Mention worker stopped")
+
+    async def run(self, handler: Callable[[Mention], str | None]):
+        """Run the mention monitor with concurrent listener and worker."""
+        self._running = True  # Need to set running flag before starting tasks
+        monitor_logger = logging.getLogger(__name__ + ".monitor")  # 'grok.mention.monitor'
+        monitor_logger.info("Mention monitor started (concurrent mode)")
+
+        # Create concurrent tasks
+        listener_task = asyncio.create_task(self._mention_listener())
+        worker_task = asyncio.create_task(self._mention_worker(handler))
+
+        try:
+            # Wait for both tasks to complete
+            # Using return_exceptions=True so individual task failures don't cancel others
+            results = await asyncio.gather(listener_task, worker_task, return_exceptions=True)
+
+            # Check if there were unexpected exception results (which would be Exception objects)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+                    monitor_logger.error(f"Task {i} failed unexpectedly: {result}")
+
+        except asyncio.CancelledError:
+            monitor_logger.info("Mention monitor cancelled")
+            # Cancel both tasks on explicit cancellation
+            listener_task.cancel()
+            worker_task.cancel()
+
+            # Wait for them to finish their cancellation (may need to wait for network calls, db ops)
+            try:
+                await asyncio.gather(listener_task, worker_task, return_exceptions=True)
+            except Exception as e:
+                monitor_logger.debug(f"Cancellation errors ignored: {e}")
+        except Exception as e:
+            monitor_logger.error(f"Unexpected error in monitor: {e}", exc_info=True)
+
+        monitor_logger.info("Mention monitor stopped")
 
     async def stop(self) -> None:
         """Stop the monitor."""
         logger.info("Stopping mention monitor...")
         self._running = False
+
+        # Wait briefly before exit, allowing tasks to detect the stopped state
+        await asyncio.sleep(0.1)

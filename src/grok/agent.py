@@ -153,7 +153,8 @@ class BilibiliAgent:
             if "video_title" in context and context["video_title"]:
                 parts.append(f"视频标题：{context['video_title']}")
             if "video_description" in context and context["video_description"]:
-                parts.append(f"视频简介：{context['video_description']}")
+                if len(context["video_description"]) > 1:
+                    parts.append(f"视频简介：{context['video_description']}")
             if "root_content" in context and context["root_content"]:
                 parts.append(f"主贴内容：{context['root_content']}")
             if "target_content" in context and context["target_content"]:
@@ -163,7 +164,7 @@ class BilibiliAgent:
         parts.append(f"用户 @{username} 在 B 站评论中@提到了你。")
         parts.append(f"评论内容：{mention_content}")
         parts.append(
-            "请根据以上上下文生成一个简短友好的回复（不超过 100 字），表达感谢并适当回应。"
+            "请根据以上上下文生成一个简短友好的回复（不超过 300 字），适当回应。"
         )
 
         return "\n".join(parts)

@@ -138,6 +138,20 @@ class Database:
         rows = await cursor.fetchall()
         return [self._row_to_mention(row) for row in rows]
 
+    async def get_one_pending_mention(self) -> Mention | None:
+        """Get one pending mention (LIFO strategy - newest first)."""
+        cursor = await self._conn.execute(
+            """
+            SELECT * FROM mentions 
+            WHERE status = 'pending' 
+            ORDER BY ctime DESC 
+            LIMIT 1
+        """,
+        )
+
+        row = await cursor.fetchone()
+        return self._row_to_mention(row) if row else None
+
     async def get_mention_by_id(self, mention_id: int) -> Mention | None:
         """Get mention by ID."""
         cursor = await self._conn.execute(

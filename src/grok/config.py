@@ -21,6 +21,8 @@ class MonitorConfig:
 
     poll_interval: int = 60
     batch_size: int = 20
+    processing_interval_seconds: int = 20
+    processing_timeout_minutes: int = 20
 
 
 @dataclass
@@ -107,21 +109,45 @@ def _apply_env_overrides(config: dict, prefix: str = "GROK_") -> None:
 
     Environment variables should be named like GROK_xxx_yyy for nested keys.
     Example: GROK_AGENT_MODEL=gpt-4 -> config["agent"]["model"] = "gpt-4"
+
+    For keys with underscores, the function will try to match existing keys first.
+    Example: GROK_MONITOR_POLL_INTERVAL=30 -> config["monitor"]["poll_interval"] = 30
     """
+
+    def _find_and_set_key(current: dict, parts: list[str], value: Any) -> bool:
+        """Try to find and set a key by combining parts. Returns True if found."""
+        if not parts:
+            return False
+
+        # Try to match by combining parts (greedy, longest first)
+        for i in range(len(parts), 0, -1):
+            combined = "_".join(parts[:i])
+            if combined in current:
+                if i == len(parts):
+                    # Found the complete match
+                    current[combined] = value
+                    return True
+                else:
+                    # Found partial match, recurse
+                    if isinstance(current[combined], dict):
+                        return _find_and_set_key(current[combined], parts[i:], value)
+                    return False
+
+        # No match found, create nested structure
+        if len(parts) == 1:
+            current[parts[0]] = value
+            return True
+
+        if parts[0] not in current:
+            current[parts[0]] = {}
+        return _find_and_set_key(current[parts[0]], parts[1:], value)
+
     for key, value in os.environ.items():
         if not key.startswith(prefix):
             continue
 
         parts = key[len(prefix) :].lower().split("_")
-        current = config
-
-        for part in parts[:-1]:
-            if part not in current:
-                current[part] = {}
-            current = current[part]
-
-        final_key = parts[-1]
-        current[final_key] = _parse_env_value(value)
+        _find_and_set_key(config, parts, _parse_env_value(value))
 
 
 def _parse_env_value(value: str) -> Any:
@@ -194,3 +220,9 @@ def validate_config(config: Config) -> None:
 
     if config.reply.rate_limit_seconds < 1:
         raise ConfigError("reply.rate_limit_seconds must be at least 1")
+
+    if config.monitor.processing_interval_seconds < 1:
+        raise ConfigError("monitor.processing_interval_seconds must be at least 1")
+
+    if config.monitor.processing_timeout_minutes < 1:
+        raise ConfigError("monitor.processing_timeout_minutes must be at least 1")

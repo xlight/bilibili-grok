@@ -89,6 +89,8 @@ class GrokBot:
             db=self._db,
             poll_interval=self.config.monitor.poll_interval,
             batch_size=self.config.monitor.batch_size,
+            processing_interval_seconds=self.config.monitor.processing_interval_seconds,
+            processing_timeout_minutes=self.config.monitor.processing_timeout_minutes,
         )
 
         if self.config.health.enabled:
@@ -246,10 +248,6 @@ class GrokBot:
 
         self._shutdown_started = True
         logger.info("Shutting down Grok bot...")
-
-        current_task = asyncio.current_task()
-        if current_task:
-            current_task.cancel()
 
         if self._mention_monitor:
             await self._mention_monitor.stop()
