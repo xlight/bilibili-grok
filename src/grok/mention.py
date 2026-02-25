@@ -2,8 +2,8 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 
@@ -14,19 +14,49 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class MentionItem:
-    """Parsed mention item from API."""
+    """Raw mention item from API - preserves complete data structure."""
 
-    id: int
-    type: str
-    oid: int
-    root: int
-    parent: int
-    mid: int
-    uname: str
-    content: str
-    ctime: int
-    reply_count: int
-    hide_reply_button: bool
+    raw: dict
+
+    @property
+    def id(self) -> int:
+        return self.raw.get("id", 0)
+
+    @property
+    def type(self) -> str:
+        return self.raw.get("item", {}).get("type", "reply")
+
+    @property
+    def oid(self) -> int:
+        return self.raw.get("item", {}).get("subject_id", 0)
+
+    @property
+    def root(self) -> int:
+        return self.raw.get("item", {}).get("root_id", 0)
+
+    @property
+    def parent(self) -> int:
+        return self.raw.get("item", {}).get("target_id", 0)
+
+    @property
+    def mid(self) -> int:
+        return self.raw.get("user", {}).get("mid", 0)
+
+    @property
+    def uname(self) -> str:
+        return self.raw.get("user", {}).get("nickname", "")
+
+    @property
+    def content(self) -> str:
+        return self.raw.get("item", {}).get("source_content", "")
+
+    @property
+    def ctime(self) -> int:
+        return self.raw.get("at_time", 0)
+
+    @property
+    def hide_reply_button(self) -> bool:
+        return self.raw.get("item", {}).get("hide_reply_button", False)
 
 
 class MentionMonitor:
@@ -46,7 +76,7 @@ class MentionMonitor:
         self.poll_interval = poll_interval
         self.batch_size = batch_size
         self._running = False
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -61,7 +91,7 @@ class MentionMonitor:
             )
         return self._client
 
-    async def close(self):
+    async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
@@ -107,25 +137,8 @@ class MentionMonitor:
         return mentions, next_cursor
 
     def _parse_mention_item(self, item: dict) -> MentionItem:
-        """Parse mention item from API response."""
-        try:
-            item_data = item.get("item", {})
-            return MentionItem(
-                id=item.get("id", 0),
-                type=item_data.get("type", "reply"),
-                oid=item_data.get("subject_id", 0),
-                root=item_data.get("root_id", 0),
-                parent=item_data.get("target_id", 0),
-                mid=item.get("user", {}).get("mid", 0),
-                uname=item.get("user", {}).get("nickname", ""),
-                content=item_data.get("source_content", ""),
-                ctime=item_data.get("at_time", 0),
-                reply_count=0,
-                hide_reply_button=item_data.get("hide_reply_button", False),
-            )
-        except KeyError as e:
-            print(f"Failed to parse mention item: {e}, item: {item}")
-            raise
+        """Parse mention item from API response - preserves raw structure."""
+        return MentionItem(raw=item)
 
     async def filter_valid_mentions(self, mentions: list[MentionItem]) -> list[MentionItem]:
         """Filter mentions that can be replied to."""
@@ -142,9 +155,7 @@ class MentionMonitor:
                 type_val = type_val.lower()
 
             if type_val not in valid_types:
-                logger.info(
-                    f"Mention {mention.id} skipped: type {mention.type} not in valid types"
-                )
+                logger.info(f"Mention {mention.id} skipped: type {mention.type} not in valid types")
                 continue
             valid.append(mention)
 
@@ -152,7 +163,7 @@ class MentionMonitor:
             logger.info(f"Found {len(valid)} valid mentions to process")
         return valid
 
-    async def sync_mentions(self):
+    async def sync_mentions(self) -> int:
         """Sync mentions from API to database."""
         cursor = 0
         total_synced = 0
@@ -173,6 +184,7 @@ class MentionMonitor:
 
             total_fetched += len(mentions)
             logger.info(f"Fetched {len(mentions)} mentions (cursor: {cursor})")
+            # logger.info(f"Fetched mentions: {mentions}")
 
             valid_mentions = await self.filter_valid_mentions(mentions)
             logger.info(f"Filtered to {len(valid_mentions)} valid mentions")
@@ -202,7 +214,7 @@ class MentionMonitor:
         logger.info(f"Mention sync complete: {total_synced} new, {total_fetched} total fetched")
         return total_synced
 
-    async def process_mentions(self, handler):
+    async def process_mentions(self, handler: Callable[[Mention], None]) -> None:
         """Process pending mentions with handler callback."""
         if not self._running:
             logger.info("Mention monitor stopped, skipping processing")
@@ -265,7 +277,7 @@ class MentionMonitor:
                     break
                 await asyncio.sleep(1)
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Stop the monitor."""
         logger.info("Stopping mention monitor...")
         self._running = False

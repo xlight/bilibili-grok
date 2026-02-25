@@ -3,7 +3,7 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
@@ -102,7 +102,7 @@ class ConfigError(Exception):
     pass
 
 
-def _apply_env_overrides(config: dict, prefix: str = "GROK_"):
+def _apply_env_overrides(config: dict, prefix: str = "GROK_") -> None:
     """Apply environment variable overrides to config.
 
     Environment variables should be named like GROK_xxx_yyy for nested keys.
@@ -155,7 +155,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
     if not config_file.exists():
         raise ConfigError(f"Config file not found: {config_path}")
 
-    with open(config_file, "r") as f:
+    with open(config_file) as f:
         config_dict = yaml.safe_load(f)
 
     _apply_env_overrides(config_dict)
@@ -181,7 +181,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
     )
 
 
-def validate_config(config: Config):
+def validate_config(config: Config) -> None:
     """Validate configuration."""
     if not config.agent.api_key:
         raise ConfigError("agent.api_key is required")

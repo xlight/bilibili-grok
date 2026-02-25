@@ -1,12 +1,13 @@
 """Health check endpoint for Bilibili Grok."""
 
 import asyncio
-import json
 import signal
+import types
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional
+from typing import Any
 
 from aiohttp import web
 
@@ -39,8 +40,8 @@ class HealthCheck:
     ):
         self.host = host
         self.port = port
-        self._app: Optional[web.Application] = None
-        self._runner: Optional[web.AppRunner] = None
+        self._app: web.Application | None = None
+        self._runner: web.AppRunner | None = None
         self._start_time = time.time()
         self._shutdown_event = asyncio.Event()
         self._component_checks: dict[str, Callable] = {}
@@ -127,7 +128,7 @@ class GracefulShutdown:
         """Register a callback to be called on shutdown."""
         self._callbacks.append(callback)
 
-    def _signal_handler(self, signum, frame):
+    def _signal_handler(self, signum: int, frame: types.FrameType | None) -> None:
         """Handle shutdown signal."""
         print(f"Received signal {signum}, initiating graceful shutdown...")
         asyncio.create_task(self._shutdown())
@@ -145,12 +146,12 @@ class GracefulShutdown:
 
         self._shutdown_event.set()
 
-    def setup(self):
+    def setup(self) -> None:
         """Setup signal handlers."""
         for sig in (signal.SIGTERM, signal.SIGINT):
             self._original_handlers[sig] = signal.signal(sig, self._signal_handler)
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Restore original signal handlers."""
         for sig, handler in self._original_handlers.items():
             signal.signal(sig, handler)

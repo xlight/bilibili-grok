@@ -2,7 +2,6 @@
 
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
@@ -36,14 +35,14 @@ class BilibiliAgent:
     def __init__(
         self,
         config: AgentConfig,
-        tools: Optional[list[BaseTool]] = None,
+        tools: list[BaseTool] | None = None,
     ):
         self.config = config
         self.tools = tools or []
         self._agent = None
         self._initialize_agent()
 
-    def _initialize_agent(self):
+    def _initialize_agent(self) -> None:
         """Initialize the LangGraph agent."""
         # import logging
 
@@ -60,7 +59,6 @@ class BilibiliAgent:
             pass
 
         from langchain_openai import ChatOpenAI
-        from langgraph.prebuilt import create_react_agent
 
         llm = ChatOpenAI(
             model=self.config.model,
@@ -79,7 +77,7 @@ class BilibiliAgent:
         self,
         mention_content: str,
         username: str,
-        context: Optional[dict] = None,
+        context: dict | None = None,
         timeout: int = 60,
     ) -> str:
         """Generate a reply to a mention.
@@ -93,8 +91,8 @@ class BilibiliAgent:
         Returns:
             Generated reply text
         """
-        import logging
         import asyncio
+        import logging
 
         logger = logging.getLogger(__name__)
 
@@ -124,7 +122,7 @@ class BilibiliAgent:
                     pass
                 raise AgentError(f"LLM call timed out after {timeout} seconds")
 
-            logger.info(f"LLM response received")
+            logger.info("LLM response received")
 
             messages = result.get("messages", [])
             if not messages:
@@ -145,7 +143,7 @@ class BilibiliAgent:
         self,
         mention_content: str,
         username: str,
-        context: Optional[dict],
+        context: dict | None,
     ) -> str:
         """Build the prompt for the agent."""
         parts = [
@@ -185,13 +183,13 @@ class BilibiliAgent:
 
         return reply
 
-    def add_tool(self, tool: BaseTool):
+    def add_tool(self, tool: BaseTool) -> None:
         """Add a tool to the agent."""
         if tool.name not in [t.name for t in self.tools]:
             self.tools.append(tool)
             self._initialize_agent()
 
-    def remove_tool(self, tool_name: str):
+    def remove_tool(self, tool_name: str) -> None:
         """Remove a tool from the agent."""
         self.tools = [t for t in self.tools if t.name != tool_name]
         self._initialize_agent()

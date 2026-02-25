@@ -2,8 +2,6 @@
 
 import asyncio
 import logging
-import signal
-from typing import Optional
 
 # logging.getLogger("langgraph").setLevel(logging.DEBUG)
 # logging.getLogger("langgraph.graph").setLevel(logging.DEBUG)
@@ -13,17 +11,15 @@ from typing import Optional
 # logging.getLogger("litellm").setLevel(logging.DEBUG)
 # logging.getLogger("litellm.main").setLevel(logging.DEBUG)
 # logging.getLogger("httpx").setLevel(logging.INFO)
-
 from grok import __version__
-from grok.agent import BilibiliAgent, AgentConfig
+from grok.agent import AgentConfig, BilibiliAgent
 from grok.config import Config, ConfigError, load_config, validate_config
-from grok.db import Database
+from grok.db import Database, Mention
 from grok.health import GracefulShutdown, HealthCheck
-from grok.login import BilibiliLogin
 from grok.logger import get_logger, setup_logging
+from grok.login import BilibiliLogin
 from grok.mention import MentionMonitor
 from grok.reply import CommentReply
-
 
 logger = get_logger(__name__)
 
@@ -33,16 +29,16 @@ class GrokBot:
 
     def __init__(self, config: Config):
         self.config = config
-        self._login: Optional[BilibiliLogin] = None
-        self._db: Optional[Database] = None
-        self._mention_monitor: Optional[MentionMonitor] = None
-        self._reply: Optional[CommentReply] = None
-        self._agent: Optional[BilibiliAgent] = None
-        self._health: Optional[HealthCheck] = None
-        self._shutdown: Optional[GracefulShutdown] = None
+        self._login: BilibiliLogin | None = None
+        self._db: Database | None = None
+        self._mention_monitor: MentionMonitor | None = None
+        self._reply: CommentReply | None = None
+        self._agent: BilibiliAgent | None = None
+        self._health: HealthCheck | None = None
+        self._shutdown: GracefulShutdown | None = None
         self._shutdown_started: bool = False
 
-    async def initialize(self):
+    async def initialize(self) -> None:
         """Initialize all components."""
         logger.info("Initializing Grok bot...")
 
@@ -122,7 +118,7 @@ class GrokBot:
 
         return {"status": "healthy"}
 
-    async def _handle_mention(self, mention) -> Optional[str]:
+    async def _handle_mention(self, mention: Mention) -> str | None:
         """Handle a mention - generate and send reply."""
         logger.info(f"Processing mention {mention.id} from {mention.uname}")
 
@@ -155,9 +151,8 @@ class GrokBot:
 
         await self._mention_monitor.run(self._handle_mention)
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Shutdown all components."""
-        import asyncio
 
         if self._shutdown_started:
             logger.info("Shutdown already in progress")
@@ -191,7 +186,7 @@ class GrokBot:
         logger.info("Grok bot shutdown complete")
 
 
-async def main():
+async def main() -> int:
     """Main entry point."""
     try:
         config = load_config("config.yaml")

@@ -1,10 +1,10 @@
 """SQLite database for mention tracking."""
 
-import aiosqlite
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+
+import aiosqlite
 
 
 @dataclass
@@ -21,9 +21,9 @@ class Mention:
     content: str
     ctime: int
     status: str
-    reply_content: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    reply_content: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class Database:
@@ -31,22 +31,22 @@ class Database:
 
     def __init__(self, db_path: str = "data/grok.db"):
         self.db_path = Path(db_path)
-        self._conn: Optional[aiosqlite.Connection] = None
+        self._conn: aiosqlite.Connection | None = None
 
-    async def connect(self):
+    async def connect(self) -> None:
         """Connect to database."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = await aiosqlite.connect(self.db_path)
         self._conn.row_factory = aiosqlite.Row
         await self._initialize()
 
-    async def close(self):
+    async def close(self) -> None:
         """Close database connection."""
         if self._conn:
             await self._conn.close()
             self._conn = None
 
-    async def _initialize(self):
+    async def _initialize(self) -> None:
         """Create tables if not exist."""
         await self._conn.execute("""
             CREATE TABLE IF NOT EXISTS mentions (
@@ -122,7 +122,7 @@ class Database:
         rows = await cursor.fetchall()
         return [self._row_to_mention(row) for row in rows]
 
-    async def get_mention_by_id(self, mention_id: int) -> Optional[Mention]:
+    async def get_mention_by_id(self, mention_id: int) -> Mention | None:
         """Get mention by ID."""
         cursor = await self._conn.execute(
             """
@@ -138,7 +138,7 @@ class Database:
         self,
         mention_id: int,
         status: str,
-        reply_content: Optional[str] = None,
+        reply_content: str | None = None,
     ):
         """Update mention status and optional reply content."""
         await self._conn.execute(

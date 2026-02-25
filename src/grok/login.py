@@ -2,13 +2,11 @@
 
 import asyncio
 import json
-import os
 import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import httpx
 import qrcode
@@ -75,8 +73,8 @@ class BilibiliLogin:
 
     def __init__(self, credential_path: str = "data/credentials.json"):
         self.credential_path = Path(credential_path)
-        self._credentials: Optional[Credentials] = None
-        self._client: Optional[httpx.AsyncClient] = None
+        self._credentials: Credentials | None = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -93,7 +91,7 @@ class BilibiliLogin:
             )
         return self._client
 
-    async def close(self):
+    async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
@@ -225,20 +223,20 @@ class BilibiliLogin:
 
         return await self.poll_login(qrcode_key)
 
-    async def save_credentials(self, credentials: Credentials):
+    async def save_credentials(self, credentials: Credentials) -> None:
         """Save credentials to file."""
         self.credential_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.credential_path, "w") as f:
             json.dump(credentials.to_dict(), f, indent=2)
         self._credentials = credentials
 
-    async def load_credentials(self) -> Optional[Credentials]:
+    async def load_credentials(self) -> Credentials | None:
         """Load credentials from file if exists and not expired."""
         if not self.credential_path.exists():
             return None
 
         try:
-            with open(self.credential_path, "r") as f:
+            with open(self.credential_path) as f:
                 data = json.load(f)
 
             credentials = Credentials.from_dict(data)
@@ -254,7 +252,7 @@ class BilibiliLogin:
             return None
 
     @property
-    def credentials(self) -> Optional[Credentials]:
+    def credentials(self) -> Credentials | None:
         return self._credentials
 
     async def ensure_valid_credentials(self) -> Credentials:
@@ -278,7 +276,7 @@ class BilibiliLogin:
 
         return await self.login_interactive()
 
-    def get_cookie_dict(self) -> dict:
+    def get_cookie_dict(self) -> dict[str, str]:
         """Get credentials as cookie dict for httpx."""
         if not self._credentials:
             return {}

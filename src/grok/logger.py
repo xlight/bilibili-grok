@@ -2,22 +2,16 @@
 
 import json
 import logging
-import os
 import re
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Optional
-
-import yaml
-
 
 SENSITIVE_KEYS = {
     "sessdata",
     "bili_jct",
     "buvid3",
     "dedeuserid",
-    "api_key",
     "api_key",
     "token",
     "secret",
@@ -28,7 +22,7 @@ SENSITIVE_KEYS = {
 class SensitiveDataFilter(logging.Filter):
     """Filter out sensitive data from log records."""
 
-    def __init__(self, sensitive_keys: Optional[set[str]] = None):
+    def __init__(self, sensitive_keys: set[str] | None = None):
         super().__init__()
         self.sensitive_keys = sensitive_keys or SENSITIVE_KEYS
 
@@ -119,7 +113,7 @@ class JsonFormatter(logging.Formatter):
 def setup_logging(
     level: str = "INFO",
     format_: str = "text",
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     max_bytes: int = 10 * 1024 * 1024,
     backup_count: int = 3,
 ) -> logging.Logger:

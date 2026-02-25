@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from enum import IntEnum
-from typing import Optional
 
 import httpx
 
@@ -44,7 +43,7 @@ class CommentReply:
         self.cookies = cookies
         self.rate_limit_seconds = rate_limit_seconds
         self._last_reply_time = 0.0
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -60,7 +59,7 @@ class CommentReply:
             )
         return self._client
 
-    async def close(self):
+    async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
@@ -86,7 +85,7 @@ class CommentReply:
         }
         return type_map.get(type_, "reply")
 
-    def _get_type_id(self, type_) -> int:
+    def _get_type_id(self, type_: int | str) -> int:
         """Map type to ID."""
         if isinstance(type_, int):
             return type_
@@ -104,7 +103,7 @@ class CommentReply:
         message: str,
         root: int = 0,
         parent: int = 0,
-        at_mids: Optional[list[int]] = None,
+        at_mids: list[int] | None = None,
     ) -> dict:
         """Reply to a comment.
 
@@ -195,7 +194,7 @@ class CommentReply:
         message: str,
         root: int,
         parent: int,
-        reply_mid: Optional[int] = None,
+        reply_mid: int | None = None,
     ) -> dict:
         """Reply to a specific comment (threaded reply).
 
