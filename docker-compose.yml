@@ -8,8 +8,31 @@ services:
       - ./data:/app/data
       - ./config.yaml:/app/config.yaml
     environment:
-      - LITELLM_API_KEY=${LITELLM_API_KEY}
-      - SEARCH_API_KEY=${SEARCH_API_KEY}
+      # Agent configuration
+      - GROK_AGENT_API_KEY=${LITELLM_API_KEY}
+      # If using alternative model provider
+      # - GROK_AGENT_API_BASE=${AGENT_API_BASE}
+      # - GROK_AGENT_MODEL=${AGENT_MODEL}
+      
+      # Monitor configuration  
+      - GROK_MONITOR_POLL_INTERVAL=${MONITOR_POLL_INTERVAL:-60}
+      - GROK_MONITOR_BATCH_SIZE=${MONITOR_BATCH_SIZE:-20}
+      - GROK_MONITOR_PROCESSING_INTERVAL_SECONDS=${MONITOR_PROCESSING_INTERVAL_SECONDS:-20}
+      - GROK_MONITOR_PROCESSING_TIMEOUT_MINUTES=${MONITOR_PROCESSING_TIMEOUT_MINUTES:-20}
+      
+      # Reply configuration
+      - GROK_REPLY_RATE_LIMIT_SECONDS=${REPLY_RATE_LIMIT_SECONDS:-3}
+      - GROK_REPLY_MAX_RETRIES=${REPLY_MAX_RETRIES:-3}
+      
+      # Search tool
+      - GROK_SEARCH_API_KEY=${SEARCH_API_KEY}
+      
+      # Logging configuration
+      - GROK_LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      
+      # Health check
+      - GROK_HEALTH_HOST=${HEALTH_HOST:-0.0.0.0}
+      - GROK_HEALTH_PORT=${HEALTH_PORT:-8080}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

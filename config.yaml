@@ -1,14 +1,16 @@
 bilibili:
   credential_path: "data/credentials.json"
-  
+
 monitor:
   poll_interval: 60
   batch_size: 20
-  
+  processing_interval_seconds: 20
+  processing_timeout_minutes: 20
+
 reply:
   rate_limit_seconds: 3
   max_retries: 3
-  
+
 agent:
   model: "openai/gpt-4o-mini"
   api_base: "https://api.openai.com/v1"
@@ -16,25 +18,25 @@ agent:
   max_tokens: 500
   temperature: 0.7
   system_prompt: |
-    You are a helpful assistant on Bilibili. 
+    You are a helpful assistant on Bilibili.
     Respond naturally in Chinese to comments that @mention the user.
     Keep your responses concise and friendly.
-    
+
 tools:
   enabled:
     - search
-    
+
 search:
   api_key: "${SEARCH_API_KEY}"
   engine: "duckduckgo"
-  
+
 logging:
   level: "INFO"
   format: "text"
   file: "data/grok.log"
   max_bytes: 10485760
   backup_count: 3
-  
+
 health:
   enabled: true
   port: 8080
