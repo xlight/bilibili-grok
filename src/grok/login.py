@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -254,6 +255,25 @@ class BilibiliLogin:
     @property
     def credentials(self) -> Credentials | None:
         return self._credentials
+
+    async def get_user_name(self) -> str | None:
+        """Get current user's nickname from nav API.
+
+        Returns:
+            User nickname or None if failed
+        """
+        try:
+            resp = await self.client.get("https://api.bilibili.com/x/web-interface/nav")
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data["code"] == 0:
+                return data["data"].get("uname")
+            return None
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to get user name: {e}")
+            return None
 
     async def ensure_valid_credentials(self) -> Credentials:
         """Ensure valid credentials exist, either load or login."""

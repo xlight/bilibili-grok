@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -10,6 +11,42 @@ import httpx
 from grok.db import Database, Mention
 
 logger = logging.getLogger(__name__)
+
+
+def strip_bot_mentions(
+    content: str, at_details: list[dict], bot_mid: int, bot_nickname: str | None = None
+) -> str:
+    """Strip bot mentions from content.
+
+    Args:
+        content: The source content with @mentions
+        at_details: List of mentioned users from API
+        bot_mid: The bot's mid to identify and remove
+        bot_nickname: Fallback nickname for regex matching when at_details is empty
+
+    Returns:
+        Content with @bot mentions removed
+    """
+    if not at_details and not bot_nickname:
+        # Can't identify bot mentions without at_details or nickname
+        return content
+
+    # Find all bot nicknames from at_details
+    bot_nicknames = [user.get("nickname", "") for user in at_details if user.get("mid") == bot_mid]
+
+    # Add fallback nickname if provided and not already in list
+    if bot_nickname and bot_nickname not in bot_nicknames:
+        bot_nicknames.append(bot_nickname)
+
+    # Remove each bot mention
+    for nickname in bot_nicknames:
+        if nickname:
+            # Escape special regex characters in nickname
+            escaped = re.escape(nickname)
+            # Remove @nickname pattern (with optional space after)
+            content = re.sub(rf"@{escaped}\s*", "", content)
+
+    return content.strip()
 
 
 @dataclass
@@ -57,6 +94,11 @@ class MentionItem:
     @property
     def hide_reply_button(self) -> bool:
         return self.raw.get("item", {}).get("hide_reply_button", False)
+
+    @property
+    def at_details(self) -> list[dict]:
+        """Get list of mentioned users."""
+        return self.raw.get("item", {}).get("at_details", [])
 
 
 class MentionMonitor:
@@ -201,6 +243,7 @@ class MentionMonitor:
                     content=mention.content,
                     ctime=mention.ctime,
                     status="pending",
+                    at_details=mention.at_details,  # Store at_details for mention stripping
                 )
                 inserted = await self.db.insert_mention(db_mention)
                 if inserted:

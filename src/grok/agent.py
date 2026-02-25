@@ -100,7 +100,7 @@ class BilibiliAgent:
 
         try:
             logger.info(f"Calling LLM for mention from {username}...")
-
+            logger.info(f"Prompt:\n{prompt}")
             task = asyncio.create_task(
                 self._agent.ainvoke(
                     {
@@ -146,18 +146,25 @@ class BilibiliAgent:
         context: dict | None,
     ) -> str:
         """Build the prompt for the agent."""
-        parts = [
-            f"用户 @{username} 在B站评论中@提到了你。",
-            f"评论内容: {mention_content}",
-        ]
+        parts = []
 
+        # Add context information first (video, comments)
         if context:
-            if "video_title" in context:
-                parts.append(f"视频标题: {context['video_title']}")
-            if "reply_count" in context:
-                parts.append(f"评论回复数: {context['reply_count']}")
+            if "video_title" in context and context["video_title"]:
+                parts.append(f"视频标题：{context['video_title']}")
+            if "video_description" in context and context["video_description"]:
+                parts.append(f"视频简介：{context['video_description']}")
+            if "root_content" in context and context["root_content"]:
+                parts.append(f"主贴内容：{context['root_content']}")
+            if "target_content" in context and context["target_content"]:
+                parts.append(f"被回复的评论：{context['target_content']}")
 
-        parts.append("请生成一个简短友好的回复（不超过100字），表达感谢并适当回应。")
+        # Add the main mention info
+        parts.append(f"用户 @{username} 在 B 站评论中@提到了你。")
+        parts.append(f"评论内容：{mention_content}")
+        parts.append(
+            "请根据以上上下文生成一个简短友好的回复（不超过 100 字），表达感谢并适当回应。"
+        )
 
         return "\n".join(parts)
 

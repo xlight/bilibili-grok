@@ -24,6 +24,7 @@ class Mention:
     reply_content: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    at_details: list[dict] | None = None  # List of mentioned users
 
 
 class Database:
@@ -61,6 +62,7 @@ class Database:
                 ctime INTEGER NOT NULL,
                 status TEXT DEFAULT 'pending',
                 reply_content TEXT,
+                at_details TEXT,  -- JSON array of mentioned users
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -78,6 +80,14 @@ class Database:
 
         await self._conn.commit()
 
+        # Migration: add at_details column if not exists (for existing databases)
+        try:
+            await self._conn.execute("ALTER TABLE mentions ADD COLUMN at_details TEXT")
+            await self._conn.commit()
+        except aiosqlite.OperationalError:
+            # Column already exists
+            pass
+
     async def insert_mention(self, mention: Mention) -> bool:
         """Insert mention with deduplication.
 
@@ -85,10 +95,15 @@ class Database:
             True if inserted, False if already exists
         """
         try:
+            # Convert at_details to JSON string if present
+            import json
+
+            at_details_json = json.dumps(mention.at_details) if mention.at_details else None
+
             await self._conn.execute(
                 """
-                INSERT INTO mentions (id, type, oid, root, parent, mid, uname, content, ctime, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                INSERT INTO mentions (id, type, oid, root, parent, mid, uname, content, ctime, status, at_details)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             """,
                 (
                     mention.id,
@@ -100,6 +115,7 @@ class Database:
                     mention.uname,
                     mention.content,
                     mention.ctime,
+                    at_details_json,
                 ),
             )
             await self._conn.commit()
@@ -167,6 +183,15 @@ class Database:
 
     def _row_to_mention(self, row: aiosqlite.Row) -> Mention:
         """Convert database row to Mention object."""
+        import json
+
+        at_details = None
+        if row["at_details"]:
+            try:
+                at_details = json.loads(row["at_details"])
+            except json.JSONDecodeError:
+                at_details = None
+
         return Mention(
             id=row["id"],
             type=row["type"],
@@ -181,4 +206,5 @@ class Database:
             reply_content=row["reply_content"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            at_details=at_details,
         )

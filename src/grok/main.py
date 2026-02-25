@@ -14,11 +14,12 @@ import logging
 from grok import __version__
 from grok.agent import AgentConfig, BilibiliAgent
 from grok.config import Config, ConfigError, load_config, validate_config
+from grok.context import ContextFetcher
 from grok.db import Database, Mention
 from grok.health import GracefulShutdown, HealthCheck
 from grok.logger import get_logger, setup_logging
 from grok.login import BilibiliLogin
-from grok.mention import MentionMonitor
+from grok.mention import MentionMonitor, strip_bot_mentions
 from grok.reply import CommentReply
 
 logger = get_logger(__name__)
@@ -36,6 +37,9 @@ class GrokBot:
         self._agent: BilibiliAgent | None = None
         self._health: HealthCheck | None = None
         self._shutdown: GracefulShutdown | None = None
+        self._context_fetcher: ContextFetcher | None = None
+        self._bot_mid: int = 0
+        self._bot_nickname: str = ""
         self._shutdown_started: bool = False
 
     async def initialize(self) -> None:
@@ -68,6 +72,17 @@ class GrokBot:
                 system_prompt=self.config.agent.system_prompt,
             ),
         )
+
+        self._context_fetcher = ContextFetcher(
+            cookies=self._login.get_cookie_dict(),
+            credentials=credentials,
+        )
+        logger.info("Context fetcher initialized")
+        self._bot_mid = int(credentials.dedeuserid)
+
+        # Get bot's nickname for mention stripping
+        self._bot_nickname = await self._login.get_user_name() or ""
+        logger.info(f"Bot mid: {self._bot_mid}, nickname: {self._bot_nickname}")
 
         self._mention_monitor = MentionMonitor(
             cookies=self._login.get_cookie_dict(),
@@ -123,9 +138,80 @@ class GrokBot:
         logger.info(f"Processing mention {mention.id} from {mention.uname}")
 
         try:
+            # Fetch context (video info, root/target comments)
+            context = {}
+
+            if self._context_fetcher:
+                logger.info(f"Fetching context for mention {mention.id}")
+
+                # Fetch video info
+                if mention.oid:
+                    video_info = await self._context_fetcher.fetch_video_info(mention.oid)
+                    if video_info:
+                        logger.info(f"Video info: {video_info}")
+                        context["video_title"] = video_info.title[:1000]
+                        # Add description if available
+                        if video_info.description:
+                            context["video_description"] = video_info.description[:500]
+                    else:
+                        logger.warning(f"Failed to fetch video info for oid={mention.oid}")
+
+                # Fetch target comment (the comment being replied to)
+                if mention.parent and mention.oid:
+                    target_info = await self._context_fetcher.fetch_target_comment(
+                        mention.oid, mention.parent, mention.root
+                    )
+                    if target_info:
+                        logger.info(f"Target comment: {target_info}")
+                        context["target_content"] = target_info.content[:2000]
+
+                # Fetch root comment (top-level comment)
+                if mention.root and mention.oid and mention.root != mention.parent:
+                    root_info = await self._context_fetcher.fetch_root_comment(
+                        mention.oid, mention.root
+                    )
+                    if root_info:
+                        logger.info(f"Root comment: {root_info.content[:50]}...")
+                        context["root_content"] = root_info.content[:2000]
+
+                logger.info(f"Context collected: {list(context.keys()) if context else 'none'}")
+            else:
+                logger.warning("Context fetcher not initialized")
+
+            # Clean mention content
+            # 1. Strip "回复 @username :" prefix if this is a reply to specific comment
+            cleaned_content = mention.content
+            if mention.parent and mention.parent != 0:
+                # Pattern: "回复 @username :content" or "回复 @username:content"
+                import re
+
+                reply_pattern = r"^回复\s+@\S+\s*:\s*"
+                cleaned_content = re.sub(reply_pattern, "", cleaned_content)
+                logger.info(f"Removed reply prefix, cleaned: {cleaned_content[:50]}...")
+
+            # 2. Strip bot mentions using at_details if available
+            at_details = (
+                mention.at_details if hasattr(mention, "at_details") and mention.at_details else []
+            )
+            cleaned_content = strip_bot_mentions(
+                cleaned_content,
+                at_details=at_details,
+                bot_mid=self._bot_mid,
+                bot_nickname=self._bot_nickname,
+            )
+
+            # Additionally remove any remaining @username patterns to clean up
+            import re
+
+            cleaned_content = re.sub(r"@\S+\s*", "", cleaned_content).strip()
+
+            logger.info(f"Final cleaned content: {cleaned_content[:50]}...")
+
+            logger.info(f"Calling LLM with context: {list(context.keys()) if context else 'none'}")
             reply_content = await self._agent.generate_reply(
-                mention_content=mention.content,
+                mention_content=cleaned_content,
                 username=mention.uname,
+                context=context if context else None,
             )
 
             logger.info(f"Generated reply: {reply_content}")
@@ -173,6 +259,9 @@ class GrokBot:
 
         if self._reply:
             await self._reply.close()
+
+        if self._context_fetcher:
+            await self._context_fetcher.close()
 
         if self._db:
             await self._db.close()
