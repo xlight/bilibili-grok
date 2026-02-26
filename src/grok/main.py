@@ -102,7 +102,8 @@ class GrokBot:
             self._health.register_component("credential", self._check_credential)
             await self._health.start()
             logger.info(
-                f"Health check server started on {self.config.health.host}:{self.config.health.port}"
+                f"Health check server started on "
+                f"{self.config.health.host}:{self.config.health.port}"
             )
 
         self._shutdown = GracefulShutdown()

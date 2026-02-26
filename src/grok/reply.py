@@ -50,7 +50,10 @@ class CommentReply:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
                     "Referer": "https://www.bilibili.com",
                     "Content-Type": "application/x-www-form-urlencoded",
                 },

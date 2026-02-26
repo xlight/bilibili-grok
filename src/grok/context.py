@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 
@@ -35,7 +34,7 @@ class ContextFetcher:
     def __init__(self, cookies: dict[str, str], credentials: Credentials):
         self.cookies = cookies
         self.credentials = credentials
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     @property
     def client(self) -> httpx.AsyncClient:
@@ -43,7 +42,10 @@ class ContextFetcher:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
                     "Referer": "https://www.bilibili.com",
                 },
                 cookies=self.cookies,
@@ -57,7 +59,7 @@ class ContextFetcher:
             await self._client.aclose()
             self._client = None
 
-    async def fetch_video_info(self, subject_id: int) -> Optional[VideoContext]:
+    async def fetch_video_info(self, subject_id: int) -> VideoContext | None:
         """Fetch video metadata by subject_id.
 
         Args:
@@ -96,7 +98,7 @@ class ContextFetcher:
 
     async def fetch_target_comment(
         self, subject_id: int, target_id: int, root_id: int = 0
-    ) -> Optional[CommentContext]:
+    ) -> CommentContext | None:
         """Fetch target comment content using reply tree API.
 
         Args:
@@ -129,7 +131,7 @@ class ContextFetcher:
 
                 if data["code"] != 0:
                     logger.warning(
-                        f"Comment API returned error: {data.get('message')}, code={data.get('code')}"
+                        f"Comment API error: {data.get('message')}, code={data.get('code')}"
                     )
                     return None
 
@@ -197,7 +199,7 @@ class ContextFetcher:
             logger.warning(f"Unexpected error fetching target comment: {e}")
             return None
 
-    async def fetch_root_comment(self, subject_id: int, root_id: int) -> Optional[CommentContext]:
+    async def fetch_root_comment(self, subject_id: int, root_id: int) -> CommentContext | None:
         """Fetch root comment (顶楼) content using reply API.
 
         Args:

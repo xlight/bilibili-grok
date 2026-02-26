@@ -130,7 +130,10 @@ class MentionMonitor:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
                     "Referer": "https://www.bilibili.com",
                 },
                 cookies=self.cookies,
@@ -325,7 +328,8 @@ class MentionMonitor:
                             continue
 
                         worker_logger.info(
-                            f"Processing mention {mention.id} from {mention.uname}: {mention.content[:50]}..."
+                            f"Processing mention {mention.id} from "
+                            f"{mention.unname}: {mention.content[:50]}..."
                         )
                         await self.db.update_mention_status(mention.id, "processing")
 
@@ -398,7 +402,7 @@ class MentionMonitor:
             listener_task.cancel()
             worker_task.cancel()
 
-            # Wait for them to finish their cancellation (may need to wait for network calls, db ops)
+            # Wait for them to finish cancellation (network calls, db ops)
             try:
                 await asyncio.gather(listener_task, worker_task, return_exceptions=True)
             except Exception as e:

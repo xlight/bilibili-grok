@@ -1,6 +1,5 @@
 """Web search tool for Bilibili Grok agent."""
 
-from typing import Optional
 
 from langchain_core.tools import BaseTool, tool
 

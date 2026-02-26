@@ -69,12 +69,12 @@ class Database:
         """)
 
         await self._conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_mentions_status 
+            CREATE INDEX IF NOT EXISTS idx_mentions_status
             ON mentions(status)
         """)
 
         await self._conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_mentions_oid 
+            CREATE INDEX IF NOT EXISTS idx_mentions_oid
             ON mentions(oid)
         """)
 
@@ -102,7 +102,8 @@ class Database:
 
             await self._conn.execute(
                 """
-                INSERT INTO mentions (id, type, oid, root, parent, mid, uname, content, ctime, status, at_details)
+                INSERT INTO mentions
+                    (id, type, oid, root, parent, mid, uname, content, ctime, status, at_details)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             """,
                 (
@@ -127,9 +128,9 @@ class Database:
         """Get pending mentions to process."""
         cursor = await self._conn.execute(
             """
-            SELECT * FROM mentions 
-            WHERE status = 'pending' 
-            ORDER BY ctime ASC 
+            SELECT * FROM mentions
+            WHERE status = 'pending'
+            ORDER BY ctime ASC
             LIMIT ?
         """,
             (limit,),
@@ -142,9 +143,9 @@ class Database:
         """Get one pending mention (LIFO strategy - newest first)."""
         cursor = await self._conn.execute(
             """
-            SELECT * FROM mentions 
-            WHERE status = 'pending' 
-            ORDER BY ctime DESC 
+            SELECT * FROM mentions
+            WHERE status = 'pending'
+            ORDER BY ctime DESC
             LIMIT 1
         """,
         )
@@ -173,7 +174,7 @@ class Database:
         """Update mention status and optional reply content."""
         await self._conn.execute(
             """
-            UPDATE mentions 
+            UPDATE mentions
             SET status = ?, reply_content = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         """,
@@ -184,7 +185,7 @@ class Database:
     async def get_stats(self) -> dict:
         """Get database statistics."""
         cursor = await self._conn.execute("""
-            SELECT 
+            SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
                 SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) as processing,

@@ -82,7 +82,10 @@ class BilibiliLogin:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    ),
                     "Referer": "https://www.bilibili.com/",
                     "Origin": "https://www.bilibili.com",
                     "Accept": "application/json, text/plain, */*",
@@ -288,7 +291,7 @@ class BilibiliLogin:
         print("With content:")
         print("""{
   "sessdata": "your_sessdata_value",
-  "bili_jct": "your_bili_jct_value", 
+  "bili_jct": "your_bili_jct_value",
   "buvid3": "your_buvid3_value",
   "dedeuserid": "your_user_id",
   "expires_at": "2026-12-31T00:00:00"

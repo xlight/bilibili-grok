@@ -2,8 +2,8 @@
 
 import asyncio
 import signal
-import types
 import time
+import types
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime

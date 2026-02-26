@@ -43,7 +43,7 @@ class AgentConfig:
     max_tokens: int = 500
     temperature: float = 0.7
     system_prompt: str = field(
-        default="""You are a helpful assistant on Bilibili. 
+        default="""You are a helpful assistant on Bilibili.
 Respond naturally in Chinese to comments that @mention the user.
 Keep your responses concise and friendly."""
     )

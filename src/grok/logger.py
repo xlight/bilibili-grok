@@ -41,12 +41,11 @@ class SensitiveDataFilter(logging.Filter):
 
         for key in self.sensitive_keys:
             pattern = rf'({key})["\']?\s*[:=]\s*["\']?([^\'",}}]+)["\']?'
-            msg = re.sub(
-                pattern,
-                rf'\1: "{self._mask_value(r"\2")}"',
-                msg,
-                flags=re.IGNORECASE,
-            )
+
+            def replacer(match):
+                return f'{match.group(1)}: "{self._mask_value(match.group(2))}"'
+
+            msg = re.sub(pattern, replacer, msg, flags=re.IGNORECASE)
 
         record.msg = msg
         return True
