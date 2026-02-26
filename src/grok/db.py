@@ -104,7 +104,7 @@ class Database:
                 """
                 INSERT INTO mentions
                     (id, type, oid, root, parent, mid, uname, content, ctime, status, at_details)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     mention.id,
@@ -116,6 +116,7 @@ class Database:
                     mention.uname,
                     mention.content,
                     mention.ctime,
+                    mention.status,
                     at_details_json,
                 ),
             )
