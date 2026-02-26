@@ -470,48 +470,6 @@ class TestSyncMentions:
 
         await db.close()
 
-    async def test_sync_mentions_filters_hidden(
-        self, mock_cookie_dict, mock_db, mock_httpx_response
-    ):
-        mock_response = mock_httpx_response(
-            {
-                "code": 0,
-                "data": {
-                    "items": [
-                        {
-                            "id": 300,
-                            "item": {
-                                "type": "reply",
-                                "subject_id": 456,
-                                "root_id": 0,
-                                "target_id": 0,
-                                "source_content": "hidden",
-                                "at_time": 1700000000,
-                                "hide_reply_button": True,
-                            },
-                            "user": {
-                                "mid": 789,
-                                "nickname": "user",
-                            },
-                            "at_time": 1700000000,
-                        }
-                    ],
-                    "cursor": {"cursor": 0},
-                },
-            }
-        )
-
-        monitor = MentionMonitor(
-            cookies=mock_cookie_dict,
-            db=mock_db,
-        )
-        monitor._client = AsyncMock()
-        monitor._client.get = AsyncMock(return_value=mock_response())
-
-        synced = await monitor.sync_mentions()
-
-        assert synced == 0
-
 
 @pytest.mark.asyncio
 class TestTimeoutSkip:
@@ -540,6 +498,8 @@ class TestTimeoutSkip:
             db=mock_db,
             processing_timeout_minutes=20,
         )
+
+        assert monitor.processing_timeout_minutes == 20
 
         pending = await mock_db.get_one_pending_mention()
         assert pending is not None

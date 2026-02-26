@@ -2,10 +2,9 @@
 
 import asyncio
 import signal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from aiohttp import test_utils
 
 from grok.health import GracefulShutdown, HealthCheck, HealthStatus
 

@@ -1,6 +1,6 @@
 """Tests for context module."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 

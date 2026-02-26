@@ -2,10 +2,6 @@
 
 import json
 import logging
-from io import StringIO
-from pathlib import Path
-
-import pytest
 
 from grok.logger import JsonFormatter, SensitiveDataFilter, get_logger, setup_logging
 
@@ -260,7 +256,7 @@ class TestSetupLogging:
     def test_setup_logging_creates_log_directory(self, tmp_path):
         log_file = tmp_path / "subdir" / "test.log"
 
-        logger = setup_logging(
+        setup_logging(
             level="INFO",
             format_="text",
             log_file=str(log_file),
@@ -271,11 +267,15 @@ class TestSetupLogging:
     def test_setup_logging_adds_sensitive_filter(self, tmp_path):
         log_file = tmp_path / "test.log"
 
-        logger = setup_logging(
+        setup_logging(
             level="INFO",
             format_="text",
             log_file=str(log_file),
         )
+
+        import logging
+
+        logger = logging.getLogger("grok")
 
         for handler in logger.handlers:
             filters = [f for f in handler.filters if isinstance(f, SensitiveDataFilter)]
