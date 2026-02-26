@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  grok-dev:
+    build: .
+    container_name: bilibili-grok-dev
+    volumes:
+      - .:/app  # Mount source code for development
+      - ./data:/app/data  # Persist data
+    environment:
+      # Development environment variables
+      - GROK_AGENT_API_KEY=${GROK_AGENT_API_KEY:-your-dev-key}
+      - GROK_SEARCH_API_KEY=${GROK_SEARCH_API_KEY:-}
+      - GROK_LOGGING_LEVEL=DEBUG
+      - GROK_MONITOR_POLL_INTERVAL=${MONITOR_POLL_INTERVAL:-30}
+      - GROK_MONITOR_PROCESSING_INTERVAL_SECONDS=${MONITOR_PROCESSING_INTERVAL_SECONDS:-10}
+      - GROK_MONITOR_PROCESSING_TIMEOUT_MINUTES=${MONITOR_PROCESSING_TIMEOUT_MINUTES:-20}
+    ports:
+      - "8080:8080"  # Health check endpoint
+    restart: "no"  # Don't auto restart in dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - grok-dev-network
+
+networks:
+  grok-dev-network:
+    driver: bridge

@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  grok:
+    image: ghcr.io/${GITHUB_USERNAME:-your-username}/bilibili-grok:latest
+    container_name: bilibili-grok
+    restart: unless-stopped
+    volumes:
+      - grok-data:/app/data  # Use named volume for persistence
+    environment:
+      # Required - Agent Configuration
+      - GROK_AGENT_API_KEY=${GROK_AGENT_API_KEY}
+      
+      # Optional - Monitor Configuration (defaults shown)
+      - GROK_MONITOR_POLL_INTERVAL=${MONITOR_POLL_INTERVAL:-60}
+      - GROK_MONITOR_BATCH_SIZE=${MONITOR_BATCH_SIZE:-20}
+      - GROK_MONITOR_PROCESSING_INTERVAL_SECONDS=${MONITOR_PROCESSING_INTERVAL_SECONDS:-20}
+      - GROK_MONITOR_PROCESSING_TIMEOUT_MINUTES=${MONITOR_PROCESSING_TIMEOUT_MINUTES:-20}
+      
+      # Optional - Reply Configuration (defaults shown)
+      - GROK_REPLY_RATE_LIMIT_SECONDS=${REPLY_RATE_LIMIT_SECONDS:-3}
+      - GROK_REPLY_MAX_RETRIES=${REPLY_MAX_RETRIES:-3}
+      
+      # Optional - Search Tool
+      - GROK_SEARCH_API_KEY=${GROK_SEARCH_API_KEY}
+      
+      # Optional - Logging (defaults shown)
+      - GROK_LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
+      - GROK_LOGGING_FILE=/app/data/grok.log
+      - GROK_LOGGING_FORMAT=${LOGGING_FORMAT:-text}
+      
+      # Optional - Health Check (defaults shown)
+      - GROK_HEALTH_ENABLED=true
+      - GROK_HEALTH_PORT=${HEALTH_PORT:-8080}
+      - GROK_HEALTH_HOST=0.0.0.0
+    ports:
+      - "${HEALTH_PORT:-8080}:8080"  # Expose health check endpoint
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - grok-network
+
+volumes:
+  grok-data:  # Named volume to persist credentials and logs
+
+networks:
+  grok-network:
+    driver: bridge
