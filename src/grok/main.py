@@ -145,6 +145,10 @@ class GrokBot:
 
             if self._context_fetcher:
                 logger.info(f"Fetching context for mention {mention.id}")
+                logger.info(
+                    f"Mention details: oid={mention.oid}, root={mention.root}, "
+                    f"parent={mention.parent}, type={mention.type}"
+                )
 
                 # Fetch video info
                 if mention.oid:
@@ -159,22 +163,45 @@ class GrokBot:
                         logger.warning(f"Failed to fetch video info for oid={mention.oid}")
 
                 # Fetch target comment (the comment being replied to)
+                # Note: When root=0, parent IS the root comment (reply to top-level)
                 if mention.parent and mention.oid:
+                    logger.info(
+                        f"Fetching target comment: parent={mention.parent}, root={mention.root}"
+                    )
                     target_info = await self._context_fetcher.fetch_target_comment(
                         mention.oid, mention.parent, mention.root
                     )
                     if target_info:
                         logger.info(f"Target comment: {target_info}")
                         context["target_content"] = target_info.content[:2000]
+                        # If target is also root (root=0), store as root_content too
+                        if not mention.root:
+                            context["root_content"] = target_info.content[:2000]
+                            logger.info(
+                                "Target is also root (reply to top-level), stored as root_content"
+                            )
+                    else:
+                        logger.warning(
+                            f"Failed to fetch target comment for parent={mention.parent}"
+                        )
+                else:
+                    if not mention.parent:
+                        logger.info(
+                            "No parent comment (direct video comment), skipping target fetch"
+                        )
 
                 # Fetch root comment (top-level comment)
+                # Only fetch if root exists and is different from parent
                 if mention.root and mention.oid and mention.root != mention.parent:
+                    logger.info(f"Fetching root comment: root={mention.root}")
                     root_info = await self._context_fetcher.fetch_root_comment(
                         mention.oid, mention.root
                     )
                     if root_info:
                         logger.info(f"Root comment: {root_info.content[:50]}...")
                         context["root_content"] = root_info.content[:2000]
+                    else:
+                        logger.warning(f"Failed to fetch root comment for root={mention.root}")
 
                 logger.info(f"Context collected: {list(context.keys()) if context else 'none'}")
             else:

@@ -148,24 +148,23 @@ class BilibiliAgent:
         """Build the prompt for the agent."""
         parts = []
 
+        parts.append("请根据以下评论内容生成一个简短友好的回复（不超过 300 字），适当回应。")
+        parts.append(f"评论内容：{mention_content}")
         # Add context information first (video, comments)
         if context:
+            if "target_content" in context and context["target_content"]:
+                parts.append(f"被上面评论引用的评论：{context['target_content']}")
+            parts.append("以下是相关信息，在必要时使用：")
+            if "root_content" in context and context["root_content"]:
+                parts.append(f"主贴内容：{context['root_content']}")
             if "video_title" in context and context["video_title"]:
                 parts.append(f"视频标题：{context['video_title']}")
             if "video_description" in context and context["video_description"]:
                 if len(context["video_description"]) > 1:
                     parts.append(f"视频简介：{context['video_description']}")
-            if "root_content" in context and context["root_content"]:
-                parts.append(f"主贴内容：{context['root_content']}")
-            if "target_content" in context and context["target_content"]:
-                parts.append(f"被回复的评论：{context['target_content']}")
 
         # Add the main mention info
-        parts.append(f"用户 @{username} 在 B 站评论中@提到了你。")
-        parts.append(f"评论内容：{mention_content}")
-        parts.append(
-            "请根据以上上下文生成一个简短友好的回复（不超过 300 字），适当回应。"
-        )
+        parts.append(f"用户 @{username} 在 B 站评论中召唤你。")
 
         return "\n".join(parts)
 

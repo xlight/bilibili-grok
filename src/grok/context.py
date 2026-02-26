@@ -108,16 +108,53 @@ class ContextFetcher:
             CommentContext with content, or None if failed
         """
         try:
-            logger.debug(
-                f"Fetching target comment: oid={subject_id}, root={root_id or target_id}, ps=20"
+            # When root_id is 0, target_id IS the root comment
+            # Use /x/v2/reply API instead of /x/v2/reply/reply
+            if root_id == 0:
+                logger.info(
+                    f"Fetching root comment as target: oid={subject_id}, target={target_id}"
+                )
+                resp = await self.client.get(
+                    f"{self.API_URL}/x/v2/reply",
+                    params={
+                        "oid": subject_id,
+                        "type": 1,
+                        "root": target_id,
+                        "ps": 1,
+                        "pn": 1,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                if data["code"] != 0:
+                    logger.warning(
+                        f"Comment API returned error: {data.get('message')}, code={data.get('code')}"
+                    )
+                    return None
+
+                replies = data.get("data", {}).get("replies", [])
+                if not replies:
+                    logger.warning(f"No comment found for root={target_id}")
+                    return None
+
+                comment_data = replies[0]
+                content = comment_data.get("content", {}).get("message", "")
+                member = comment_data.get("member", {})
+                nickname = member.get("uname", "")
+                logger.info(f"Found root-as-target comment: {content[:50]}...")
+                return CommentContext(content=content, user_nickname=nickname)
+
+            # Normal case: fetch from reply tree
+            logger.info(
+                f"Fetching target comment: oid={subject_id}, target={target_id}, root={root_id}"
             )
-            # Use reply/reply API to fetch comment tree
             resp = await self.client.get(
                 f"{self.API_URL}/x/v2/reply/reply",
                 params={
                     "oid": subject_id,
                     "type": 1,  # 1 = video comment
-                    "root": root_id or target_id,
+                    "root": root_id,
                     "ps": 20,  # get more replies to find target
                     "pn": 1,  # page number
                 },
@@ -126,11 +163,15 @@ class ContextFetcher:
             data = resp.json()
 
             if data["code"] != 0:
-                logger.warning(f"Comment API returned error: {data.get('message')}")
+                logger.warning(
+                    f"Comment API returned error: {data.get('message')}, code={data.get('code')}"
+                )
                 return None
 
             # Search for the target comment in replies list
             replies = data.get("data", {}).get("replies", [])
+            logger.info(f"Found {len(replies)} replies in response")
+
             for reply in replies:
                 rpid = reply.get("rpid")
                 rpid_str = reply.get("rpid_str")
@@ -139,10 +180,14 @@ class ContextFetcher:
                     content = reply.get("content", {}).get("message", "")
                     member = reply.get("member", {})
                     nickname = member.get("uname", "")
+                    logger.info(f"Found target comment: {content[:50]}...")
                     return CommentContext(content=content, user_nickname=nickname)
 
             # If not found in first page, log and return None
-            logger.debug(f"Target comment {target_id} not found in first {len(replies)} replies")
+            logger.warning(f"Target comment {target_id} not found in {len(replies)} replies")
+            # Log the IDs we found for debugging
+            found_ids = [r.get("rpid") for r in replies[:5]]
+            logger.info(f"Found reply IDs (first 5): {found_ids}")
             return None
 
         except httpx.HTTPError as e:
