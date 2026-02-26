@@ -7,12 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy application code and install dependencies
 COPY pyproject.toml README.md ./
+COPY src/ src/
 RUN pip install --no-cache-dir .
 
-# Copy application code
-COPY src/ src/
 COPY config.yaml .
 
 # Create required directory
